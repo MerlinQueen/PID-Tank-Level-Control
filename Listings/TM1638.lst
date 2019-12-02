@@ -1,0 +1,288 @@
+C51 COMPILER V9.59.0.0   TM1638                                                            05/27/2019 22:23:43 PAGE 1   
+
+
+C51 COMPILER V9.59.0.0, COMPILATION OF MODULE TM1638
+OBJECT MODULE PLACED IN .\Objects\TM1638.obj
+COMPILER INVOKED BY: f:\Keil_v5\C51\BIN\C51.EXE user\TM1638.c OPTIMIZE(8,SPEED) BROWSE DEBUG OBJECTEXTEND PRINT(.\Listin
+                    -gs\TM1638.lst) OBJECT(.\Objects\TM1638.obj)
+
+line level    source
+
+   1          #include "TM1638.h"
+   2          #include "delay.h"
+   3          #include "public.h"
+   4          //unsigned char data DisBuffer[8]={0,0,0,0,0,0,0,0};    /*ÏÔÊ¾»º´æÇø*/        //¸÷¸öÊýÂë¹ÜÏ�
+             -�Ê¾µÄÖµ
+   5          unsigned char code tab[] = {
+   6                  0x3F, 0x06, 0x5B, 0x4F,
+   7                  0x66, 0x6D, 0x7D, 0x07,
+   8                  0x7F, 0x6F, 0x77, 0x7C,
+   9                  0x39, 0x5E, 0x79, 0x71, 0x40, //16                                              //0x6e,0x54,0x73,0x30,0x5
+             -e,0x50, 0x3e,
+  10                  0x50, 0x74, 0x38, //r h L
+  11                  0x54, 0x6e, 0x50, 0x73, 0x30, 0x5e, 0x5c, 0x1c, //n y r p i d o u
+  12                  0x38, 0x76, 0x79 , 0x3e //L H E U 28 29 30 31
+  13          };
+  14          
+  15          
+  16          void TM1638_Write(unsigned char DATA)                   //Ð´Êý¾Ýº¯Êý
+  17          {
+  18   1              unsigned char i;
+  19   1              for (i = 0; i < 8; i++)
+  20   1              {
+  21   2                      CLK = 0;
+  22   2                      DelayUS(1);
+  23   2                      if (DATA & 0X01)
+  24   2                              DIO = 1;
+  25   2                      else
+  26   2                              DIO = 0;
+  27   2                      DATA >>= 1;
+  28   2                      CLK = 1;
+  29   2                      DelayUS(1);
+  30   2              }
+  31   1      }
+  32          unsigned char TM1638_Read(void)                                 //¶ÁÊý¾Ýº¯Êý
+  33          {
+  34   1              unsigned char i;
+  35   1              unsigned char temp = 0;
+  36   1              DIO = 1;        //ÉèÖÃÎªÊäÈë
+  37   1              for (i = 0; i < 8; i++)
+  38   1              {
+  39   2      
+  40   2                      temp >>= 1;
+  41   2                      CLK = 0;
+  42   2                      DelayUS(1);
+  43   2                      if (DIO)
+  44   2                              temp |= 0x80;
+  45   2                      CLK = 1;
+  46   2                      DelayUS(1);
+  47   2              }
+  48   1              return temp;
+  49   1      }
+  50          void Write_COM(unsigned char cmd)               //·¢ËÍÃüÁî×Ö
+  51          {
+  52   1              STB = 0;
+C51 COMPILER V9.59.0.0   TM1638                                                            05/27/2019 22:23:43 PAGE 2   
+
+  53   1              DelayUS(1);
+  54   1              TM1638_Write(cmd);
+  55   1              DelayUS(1);
+  56   1              STB = 1;
+  57   1      }
+  58          
+  59          unsigned char KeyScan(void)
+  60          {
+  61   1              u8 c[4], sum = 0, i = 0;
+  62   1              u8 key_value = 0xff;
+  63   1              STB = 0;
+  64   1              DelayUS(1);
+  65   1              TM1638_Write(0x42);
+  66   1              DelayMS(100);
+  67   1              for (i = 0; i < 4; i++)
+  68   1                      c[i] = TM1638_Read();
+  69   1              STB = 1;                                        //4¸ö×Ö½ÚÊý¾ÝºÏ³ÉÒ»¸ö×Ö½Ú
+  70   1              if (c[0] == 0x04)       key_value = 0;
+  71   1              else  if (c[0] == 0x40) key_value = 1;
+  72   1              else  if (c[1] == 0x04) key_value = 2;
+  73   1              else  if (c[1] == 0x40) key_value = 3;
+  74   1              else  if (c[2] == 0x04) key_value = 4;
+  75   1              else  if (c[2] == 0x40) key_value = 5;
+  76   1              else  if (c[3] == 0x04) key_value = 6;
+  77   1              else  if (c[3] == 0x40) key_value = 7;
+  78   1              else  if (c[0] == 0x02) key_value = 8;
+  79   1              else  if (c[0] == 0x20) key_value = 9;
+  80   1              else  if (c[1] == 0x02) key_value = 10;
+  81   1              else  if (c[1] == 0x20) key_value = 11;
+  82   1              else  if (c[2] == 0x02) key_value = 12;
+  83   1              else  if (c[2] == 0x20) key_value = 13;
+  84   1              else  if (c[3] == 0x02) key_value = 14;
+  85   1              else  if (c[3] == 0x20) key_value = 15;
+  86   1              else key_value = 0xff;
+  87   1              return (key_value);
+  88   1      }
+  89          
+  90          void TM1638_Init(void)
+  91          {
+  92   1              unsigned char i;
+  93   1              Write_COM(0x8a);//ÁÁ¶È
+  94   1              Write_COM(0x40); //Ð´ Êý¾ÝÃüÁî
+  95   1              STB = 0;
+  96   1              TM1638_Write(0xc0);             //Ð´µØÖ·ÃüÁî
+  97   1              for (i = 0; i < 16; i++)
+  98   1                      TM1638_Write(0xff);
+  99   1              STB = 1;
+ 100   1      }
+ 101          
+ 102          void LedDisplay1(unsigned char ddata0, unsigned char ddata1, unsigned char ddata2, unsigned char ddata3,
+ 103                           unsigned char ddata4, unsigned char ddata5, unsigned char ddata6, unsigned char ddata7)
+ 104          {
+ 105   1      
+ 106   1      
+ 107   1              unsigned char  writedata0, writedata1, writedata2, writedata3, writedata4, writedata5, writedata6, writed
+             -ata7;
+ 108   1              unsigned char  data0, data1, data2, data3, data4, data5, data6, data7;
+ 109   1              data0 = ddata7;
+ 110   1              data1 = ddata6;
+ 111   1              data2 = ddata5;
+ 112   1              data3 = ddata4;
+ 113   1              data4 = ddata3;
+C51 COMPILER V9.59.0.0   TM1638                                                            05/27/2019 22:23:43 PAGE 3   
+
+ 114   1              data5 = ddata2;
+ 115   1              data6 = ddata1;
+ 116   1              data7 = ddata0;
+ 117   1      
+ 118   1              writedata0 = (tab[data0] & 0x01) + ((tab[data1] & 0x01) << 1) + ((tab[data2] & 0x01) << 2) + ((tab[data3]
+             - & 0x01) << 3) + ((tab[data4] & 0x01) << 4)
+ 119   1                           + ((tab[data5] & 0x01) << 5) + ((tab[data6] & 0x01) << 6) + ((tab[data7] & 0x01) << 7);
+ 120   1      
+ 121   1              writedata1 = ((tab[data0] & 0x02) >> 1) + ((tab[data1] & 0x02)) + ((tab[data2] & 0x02) << 1) + ((tab[data
+             -3] & 0x02) << 2) + ((tab[data4] & 0x02) << 3)
+ 122   1                           + ((tab[data5] & 0x02) << 4) + ((tab[data6] & 0x02) << 5) + ((tab[data7] & 0x02) << 6);
+ 123   1      
+ 124   1              writedata2 = ((tab[data0] & 0x04) >> 2) + ((tab[data1] & 0x04) >> 1) + ((tab[data2] & 0x04)) + ((tab[data
+             -3] & 0x04) << 1) + ((tab[data4] & 0x04) << 2)
+ 125   1                           + ((tab[data5] & 0x04) << 3) + ((tab[data6] & 0x04) << 4) + ((tab[data7] & 0x04) << 5);
+ 126   1      
+ 127   1              writedata3 = ((tab[data0] & 0x08) >> 3) + ((tab[data1] & 0x08) >> 2) + ((tab[data2] & 0x08) >> 1) + ((tab
+             -[data3] & 0x08)) + ((tab[data4] & 0x08) << 1)
+ 128   1                           + ((tab[data5] & 0x08) << 2) + ((tab[data6] & 0x08) << 3) + ((tab[data7] & 0x08) << 4);
+ 129   1      
+ 130   1              writedata4 = ((tab[data0] & 0x10) >> 4) + ((tab[data1] & 0x10) >> 3) + ((tab[data2] & 0x10) >> 2) + ((tab
+             -[data3] & 0x10) >> 1) + ((tab[data4] & 0x10))
+ 131   1                           + ((tab[data5] & 0x10) << 1) + ((tab[data6] & 0x10) << 2) + ((tab[data7] & 0x10) << 3);
+ 132   1      
+ 133   1              writedata5 = ((tab[data0] & 0x20) >> 5) + ((tab[data1] & 0x20) >> 4) + ((tab[data2] & 0x20) >> 3) + ((tab
+             -[data3] & 0x20) >> 2) + ((tab[data4] & 0x20) >> 1)
+ 134   1                           + ((tab[data5] & 0x20)) + ((tab[data6] & 0x20) << 1) + ((tab[data7] & 0x20) << 2);
+ 135   1      
+ 136   1              writedata6 = ((tab[data0] & 0x40) >> 6) + ((tab[data1] & 0x40) >> 5) + ((tab[data2] & 0x40) >> 4) + ((tab
+             -[data3] & 0x40) >> 3) + ((tab[data4] & 0x40) >> 2)
+ 137   1                           + ((tab[data5] & 0x40) >> 1) + ((tab[data6] & 0x40)) + ((tab[data7] & 0x40) << 1);
+ 138   1      
+ 139   1              writedata7 = ((tab[data0] & 0x80) >> 7) + ((tab[data1] & 0x80) >> 6) + ((tab[data2] & 0x80) >> 5) + ((tab
+             -[data3] & 0x80) >> 4) + ((tab[data4] & 0x80) >> 3)
+ 140   1                           + ((tab[data5] & 0x80) >> 2) + ((tab[data6] & 0x80) >> 1) + ((tab[data7] & 0x80));
+ 141   1      
+ 142   1              Write_COM(0x88);//ÁÁ¶È
+ 143   1              Write_COM(0x40); //Ð´ Êý¾ÝÃüÁî
+ 144   1              STB = 0;
+ 145   1              TM1638_Write(0xc0);             //Ð´µØÖ·ÃüÁî
+ 146   1      
+ 147   1              TM1638_Write(writedata0);
+ 148   1              TM1638_Write(0x80);
+ 149   1              TM1638_Write(writedata1);
+ 150   1              TM1638_Write(0x00);
+ 151   1              TM1638_Write(writedata2);
+ 152   1              TM1638_Write(0x00);
+ 153   1              TM1638_Write(writedata3);
+ 154   1              TM1638_Write(0x00);
+ 155   1              TM1638_Write(writedata4);
+ 156   1              TM1638_Write(0x00);
+ 157   1              TM1638_Write(writedata5);
+ 158   1              TM1638_Write(0x00);
+ 159   1              TM1638_Write(writedata6);
+ 160   1              TM1638_Write(0x00);
+ 161   1              TM1638_Write(writedata7);
+ 162   1              TM1638_Write(0x00);
+ 163   1      
+ 164   1              STB = 1;
+ 165   1      
+ 166   1      
+ 167   1      }
+C51 COMPILER V9.59.0.0   TM1638                                                            05/27/2019 22:23:43 PAGE 4   
+
+ 168          
+ 169          void LedDisplay(unsigned char ddata0, unsigned char ddata1, unsigned char ddata2, unsigned char ddata3,
+ 170                          unsigned char ddata4, unsigned char ddata5, unsigned char ddata6, unsigned char ddata7)
+ 171          
+ 172          {
+ 173   1              unsigned char  writedata0, writedata1, writedata2, writedata3, writedata4, writedata5, writedata6, writed
+             -ata7;
+ 174   1              unsigned char  data0, data1, data2, data3, data4, data5, data6, data7;
+ 175   1              data0 = ddata7;
+ 176   1              data1 = ddata6;
+ 177   1              data2 = ddata5;
+ 178   1              data3 = ddata4;
+ 179   1              data4 = ddata3;
+ 180   1              data5 = ddata2;
+ 181   1              data6 = ddata1;
+ 182   1              data7 = ddata0;
+ 183   1      
+ 184   1              writedata0 = (tab[data0] & 0x01) + (((tab[data1] | 0x80) & 0x01) << 1) + ((tab[data2] & 0x01) << 2) + ((t
+             -ab[data3] & 0x01) << 3) + ((tab[data4] & 0x01) << 4)
+ 185   1                           + (((tab[data5] | 0x80) & 0x01) << 5) + ((tab[data6] & 0x01) << 6) + ((tab[data7] & 0x01) <<
+             - 7);
+ 186   1      
+ 187   1              writedata1 = ((tab[data0] & 0x02) >> 1) + (((tab[data1] | 0x80) & 0x02)) + ((tab[data2] & 0x02) << 1) + (
+             -(tab[data3] & 0x02) << 2) + ((tab[data4] & 0x02) << 3)
+ 188   1                           + (((tab[data5] | 0x80) & 0x02) << 4) + ((tab[data6] & 0x02) << 5) + ((tab[data7] & 0x02) <<
+             - 6);
+ 189   1      
+ 190   1              writedata2 = ((tab[data0] & 0x04) >> 2) + (((tab[data1] | 0x80) & 0x04) >> 1) + ((tab[data2] & 0x04)) + (
+             -(tab[data3] & 0x04) << 1) + ((tab[data4] & 0x04) << 2)
+ 191   1                           + (((tab[data5] | 0x80) & 0x04) << 3) + ((tab[data6] & 0x04) << 4) + ((tab[data7] & 0x04) <<
+             - 5);
+ 192   1      
+ 193   1              writedata3 = ((tab[data0] & 0x08) >> 3) + (((tab[data1] | 0x80) & 0x08) >> 2) + ((tab[data2] & 0x08) >> 1
+             -) + ((tab[data3] & 0x08)) + ((tab[data4] & 0x08) << 1)
+ 194   1                           + (((tab[data5] | 0x80) & 0x08) << 2) + ((tab[data6] & 0x08) << 3) + ((tab[data7] & 0x08) <<
+             - 4);
+ 195   1      
+ 196   1              writedata4 = ((tab[data0] & 0x10) >> 4) + (((tab[data1] | 0x80) & 0x10) >> 3) + ((tab[data2] & 0x10) >> 2
+             -) + ((tab[data3] & 0x10) >> 1) + ((tab[data4] & 0x10))
+ 197   1                           + (((tab[data5] | 0x80) & 0x10) << 1) + ((tab[data6] & 0x10) << 2) + ((tab[data7] & 0x10) <<
+             - 3);
+ 198   1      
+ 199   1              writedata5 = ((tab[data0] & 0x20) >> 5) + (((tab[data1] | 0x80) & 0x20) >> 4) + ((tab[data2] & 0x20) >> 3
+             -) + ((tab[data3] & 0x20) >> 2) + ((tab[data4] & 0x20) >> 1)
+ 200   1                           + (((tab[data5] | 0x80) & 0x20)) + ((tab[data6] & 0x20) << 1) + ((tab[data7] & 0x20) << 2);
+ 201   1      
+ 202   1              writedata6 = ((tab[data0] & 0x40) >> 6) + (((tab[data1] | 0x80) & 0x40) >> 5) + ((tab[data2] & 0x40) >> 4
+             -) + ((tab[data3] & 0x40) >> 3) + ((tab[data4] & 0x40) >> 2)
+ 203   1                           + (((tab[data5] | 0x80) & 0x40) >> 1) + ((tab[data6] & 0x40)) + ((tab[data7] & 0x40) << 1);
+ 204   1      
+ 205   1              writedata7 = ((tab[data0] & 0x80) >> 7) + (((tab[data1] | 0x80) & 0x80) >> 6) + ((tab[data2] & 0x80) >> 5
+             -) + ((tab[data3] & 0x80) >> 4) + ((tab[data4] & 0x80) >> 3)
+ 206   1                           + (((tab[data5] | 0x80) & 0x80) >> 2) + ((tab[data6] & 0x80) >> 1) + ((tab[data7] & 0x80));
+ 207   1      
+ 208   1              Write_COM(0x88);//ÁÁ¶È
+ 209   1              Write_COM(0x40); //Ð´ Êý¾ÝÃüÁî
+ 210   1              STB = 0;
+ 211   1              TM1638_Write(0xc0);             //Ð´µØÖ·ÃüÁî
+ 212   1      
+ 213   1              TM1638_Write(writedata0);
+ 214   1              TM1638_Write(0x80);
+ 215   1              TM1638_Write(writedata1);
+C51 COMPILER V9.59.0.0   TM1638                                                            05/27/2019 22:23:43 PAGE 5   
+
+ 216   1              TM1638_Write(0x00);
+ 217   1              TM1638_Write(writedata2);
+ 218   1              TM1638_Write(0x00);
+ 219   1              TM1638_Write(writedata3);
+ 220   1              TM1638_Write(0x00);
+ 221   1              TM1638_Write(writedata4);
+ 222   1              TM1638_Write(0x00);
+ 223   1              TM1638_Write(writedata5);
+ 224   1              TM1638_Write(0x00);
+ 225   1              TM1638_Write(writedata6);
+ 226   1              TM1638_Write(0x00);
+ 227   1              TM1638_Write(writedata7);
+ 228   1              TM1638_Write(0x00);
+ 229   1              STB = 1;
+ 230   1      
+ 231   1      }
+
+
+MODULE INFORMATION:   STATIC OVERLAYABLE
+   CODE SIZE        =   1943    ----
+   CONSTANT SIZE    =     32    ----
+   XDATA SIZE       =   ----    ----
+   PDATA SIZE       =   ----    ----
+   DATA SIZE        =   ----      51
+   IDATA SIZE       =   ----    ----
+   BIT SIZE         =   ----    ----
+END OF MODULE INFORMATION.
+
+
+C51 COMPILATION COMPLETE.  0 WARNING(S),  0 ERROR(S)

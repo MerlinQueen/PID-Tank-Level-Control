@@ -1,0 +1,334 @@
+C51 COMPILER V9.59.0.0   MQMAIN                                                            05/27/2019 22:23:43 PAGE 1   
+
+
+C51 COMPILER V9.59.0.0, COMPILATION OF MODULE MQMAIN
+OBJECT MODULE PLACED IN .\Objects\MQmain.obj
+COMPILER INVOKED BY: f:\Keil_v5\C51\BIN\C51.EXE user\MQmain.c OPTIMIZE(8,SPEED) BROWSE DEBUG OBJECTEXTEND PRINT(.\Listin
+                    -gs\MQmain.lst) OBJECT(.\Objects\MQmain.obj)
+
+line level    source
+
+   1          /*
+   2          * @Author: Merlin
+   3          * @Date:   2019-05-18 15:09:04
+   4          * @Last Modified by:   Administrator
+   5          * @晶振频率:18.432MHz
+   6          * @Last Modified time: 2019-05-26 17:59:37
+   7          */
+   8          
+   9          #include <STC15.h>
+  10          #include "public.h"
+  11          #include "delay.h"
+  12          #include "TM1638.h"
+  13          #include "ADC.h"
+  14          #include "PWM.h"
+  15          //#include "OLED_spi.h"
+  16          #include "stdio.h"
+  17          #define Vref  5.0   // 参考电压
+  18          
+  19          #define kp  value_1[3]
+  20          #define ki  value_1[4]
+  21          #define kd  value_1[5]
+  22          #define CV  value_2[2]
+  23          #define SV  value_1[2]
+  24          
+  25          //u8 OLED_CV[5];   // 存放OLED----当前电压
+  26          
+  27          u8 keyValue;            // 存储按键键值
+  28          
+  29          u16  value_1[8] = {0, 0, 77, 100, 50, 20, 0, 0};     //3_p,4-i,5-d          // 基础整定 P100,i50,d20
+  30          u16  value_2[3] = {0, 1, 2};
+  31          
+  32          /**************GPIO端口初始化******************/
+  33          void GPIO_Init(void)
+  34          {
+  35   1              P0M0 = 0x00;
+  36   1              P0M1 = 0x00;
+  37   1              P1M0 = 0x00;
+  38   1              P1M1 = 0x00;
+  39   1              P2M0 = 0x00;
+  40   1              P2M1 = 0x00;
+  41   1              P3M0 = 0x00;
+  42   1              P3M1 = 0x00;
+  43   1              P4M0 = 0x00;
+  44   1              P4M1 = 0x00;
+  45   1              P5M0 = 0x00;
+  46   1              P5M1 = 0x00;
+  47   1      }
+  48          /**************显示设置******************/
+  49          void display_Value(unsigned char symb1, unsigned char symb2, unsigned int value1, unsigned int value2)
+  50          {
+  51   1              unsigned char dat1, dat2, dat3, dat4, dat5, dat6;
+  52   1              dat1 = value1 / 100;
+  53   1              dat2 = value1 / 10 % 10;
+  54   1              dat3 = value1 % 10;
+C51 COMPILER V9.59.0.0   MQMAIN                                                            05/27/2019 22:23:43 PAGE 2   
+
+  55   1              dat4 = value2 / 100;
+  56   1              dat5 = value2 / 10 % 10;
+  57   1              dat6 = value2 % 10;
+  58   1              LedDisplay(symb1 + 20, dat1, dat2, dat3, symb2 + 17, dat4, dat5, dat6);
+  59   1      }
+  60          
+  61          
+  62          /**************设置采样周期******************/
+  63          bit Timerflag = 0; 
+  64          u8 Timercount = 0;
+  65          void Timer0_Init(void)          //1毫秒@18.432MHz   定时器0 用于设置采样频率
+  66          {
+  67   1              AUXR |= 0x80;           //定时器时钟1T模式
+  68   1              TMOD &= 0xF0;           //设置定时器模式
+  69   1              TL0 = 0x00;             //设置定时初值
+  70   1              TH0 = 0xB8;             //设置定时初值
+  71   1              TF0 = 0;                //清除TF0标志
+  72   1              TR0 = 1;                //定时器0开始计时
+  73   1              ET0 = 1;        // 开启定时器中断
+  74   1      }
+  75          void Timer_IRQ(void) interrupt 1
+  76          {
+  77   1              Timercount++;
+  78   1              if (Timercount == 100)      // 每隔 100MS进行一次ADC采样
+  79   1              {
+  80   2                      Timercount = 0;         // 清零计数器
+  81   2                      Timerflag = 1;              // 置标志位为1
+  82   2              }
+  83   1      }
+  84          
+  85          /**************按键处理******************/
+  86          u16  setValue = 0;  // 存储设定值
+  87          u8       setVflag;              // 设定值确定标志
+  88          u8       symb1 = 0, symb2 = 0; // 对应y,r,PID,o,u,n  和 L,h,r
+  89          void KeyProcess()
+  90          {
+  91   1              if (keyValue <= 9)
+  92   1              {
+  93   2                      setValue = setValue * 10 + keyValue;     //  键值获取
+  94   2              }
+  95   1              else
+  96   1              {
+  97   2                      switch (keyValue)
+  98   2                      {
+  99   3                      case 10:
+ 100   3                      {
+ 101   4                              symb1 = (symb1 + 1) % 8;   // y,r,PID,o,u,n选择
+ 102   4                              break;
+ 103   4                      }
+ 104   3                      case 11:
+ 105   3                      {
+ 106   4                              symb2 = (symb2 + 1) % 3;  // L,h,r选择    h液位,L光照,r电阻
+ 107   4                              break;
+ 108   4                      }
+ 109   3                      case 12:
+ 110   3                      {
+ 111   4                              value_1[6] =0;        // o -0
+ 112   4                              break;
+ 113   4                      }
+ 114   3                      case 13:
+ 115   3                      {
+ 116   4                              value_1[6] =1;      // o-1
+C51 COMPILER V9.59.0.0   MQMAIN                                                            05/27/2019 22:23:43 PAGE 3   
+
+ 117   4                              break;
+ 118   4                      }
+ 119   3                      case 14:
+ 120   3                      {
+ 121   4                              value_1[6] =2;     // o-2
+ 122   4                              break;
+ 123   4                      }
+ 124   3                      case 15:
+ 125   3                      {
+ 126   4                              setVflag = (setVflag + 1) % 2;
+ 127   4                              if (setVflag)
+ 128   4                              {
+ 129   5                                      value_1[symb1] = setValue;    // 把设定值传给液位 或 光照
+ 130   5                              }
+ 131   4                      }
+ 132   3                      }
+ 133   2              }
+ 134   1              if (setValue > 999) setValue = 0;         
+ 135   1      }
+ 136          /**************双位控制******************/
+ 137          void Limit_Contl(void)
+ 138          {
+ 139   1              int dec;
+ 140   1              dec = value_1[7] - value_2[7];     // 根据电压判断
+ 141   1              if (dec > 5)  
+ 142   1                      PWM7_LevelOut(500);             
+ 143   1                      //PWM3_LedOut(1000);
+ 144   1              if (dec < -5)
+ 145   1                      PWM7_LevelOut(0);               
+ 146   1                      //PWM3_LedOut(0) ;
+ 147   1      }
+ 148          /**************PID控制******************/
+ 149           // 0-200mm  液位,0-200
+ 150          int ek = 0, ek_1 = 0, ek_2 = 2, pk, pk_1;
+ 151          float kpf, kif, kdf;
+ 152          
+ 153          u16 PID()
+ 154          
+ 155          {   u16 Pk;
+ 156   1      //      u16 SV;
+ 157   1      //      SV      = (u16)((value_1[2]*210.91)-1044.54)*100;                // 设定值
+ 158   1      //      if (SV<=0) SV =0;
+ 159   1              kpf = kp / 100;
+ 160   1              kif = ki / 100;
+ 161   1              kdf = kd / 100;
+ 162   1              ek_2 = ek_1;
+ 163   1              ek_1 = ek;
+ 164   1              ek = SV - CV;
+ 165   1              Pk = pk_1 + kpf * (ek - ek_1) + kif * (ek) + kdf * (ek - ek_1 * 2 + ek_2);
+ 166   1              pk_1 = Pk;
+ 167   1      
+ 168   1              return Pk;
+ 169   1      }
+ 170          /**************输出选择:手动,双位,PID******************/
+ 171          void OutChose(void)
+ 172          {
+ 173   1              u16 pid_out;
+ 174   1              //      pid_out =(PID()-1044.54)/210.91;
+ 175   1              pid_out = PID()*10+100;       // 0-200;    //需要调节部分
+ 176   1              switch (value_1[6])
+ 177   1              {
+ 178   2              case 0:   //手动设置
+C51 COMPILER V9.59.0.0   MQMAIN                                                            05/27/2019 22:23:43 PAGE 4   
+
+ 179   2              {
+ 180   3      //              PWM3_LedOut(value_1[1]);
+ 181   3      //              break;
+ 182   3                      PWM7_LevelOut(value_1[7]+10);   // 直接输出0-10v电压  有0.10v压降
+ 183   3                      break;
+ 184   3              }
+ 185   2              case 1:  // 双位控制
+ 186   2              {
+ 187   3                      Limit_Contl();
+ 188   3                      break;
+ 189   3              }
+ 190   2              case 2: // PID控制
+ 191   2              {
+ 192   3                      //PWM3_LedOut(pid_out);      // 反馈
+ 193   3                      PWM7_LevelOut(pid_out);   break;
+ 194   3              }
+ 195   2              default : PWM7_LevelOut(0); break;
+ 196   2              }
+ 197   1      }
+ 198          
+ 199          /**************ADC采样******************/
+ 200          
+ 201          //void ADC_Simple(void)
+ 202          //{
+ 203          //      float actualV,level; // 实际电压值 
+ 204          //      u16 temp;
+ 205          //      if (Timerflag)
+ 206          //      {
+ 207          //              Timerflag = 0;  // 清除标志位
+ 208          //              //value_2[2] = getADC10bitResult(0); // Led采样结果
+ 209          //                           value_2[2]=getADC10bitResult(1);   // 水箱液位采样结果
+ 210          //              actualV = (value_2[2]*Vref)/1024;
+ 211          //              level = actualV*13.33-13.05;
+ 212          //              if (level<=0)     level = 0;
+ 213          //              else
+ 214          //              {
+ 215          //                      value_2[0] = (u16)(level*100);
+ 216          //                      sprintf(OLED_CV,"%4.2f",level);     
+ 217          //                      OLED_display_str(3,42,OLED_CV);   // 显示实际电压值     
+ 218          //              }
+ 219          //      }
+ 220          
+ 221          //}
+ 222          
+ 223          
+ 224          void ADC_Simple(void)
+ 225          {
+ 226   1              u16 temp1,temp2,temp3;
+ 227   1              float actualV ,Curlevel,oledl; // 实际电压值 
+ 228   1              u16 temp;
+ 229   1              if (Timerflag)
+ 230   1              {
+ 231   2                      Timerflag = 0;  // 清除标志位
+ 232   2                      //value_2[2] = getADC10bitResult(0); // Led采样结果
+ 233   2                                 temp1=getADC10bitResult(6);   // 水箱液位采样结果
+ 234   2                                         temp2=getADC10bitResult(6); 
+ 235   2                                         temp3=getADC10bitResult(6); 
+ 236   2                                         temp=(temp1+temp2+temp3)/3;
+ 237   2                      actualV = (temp*Vref)/1024;
+ 238   2                      //Curlevel = actualV*13.33-12.95;      // 传感器参数整定
+ 239   2                      Curlevel = actualV*13.33-13.95;
+ 240   2                      oledl= actualV*14.08-13.24; 
+C51 COMPILER V9.59.0.0   MQMAIN                                                            05/27/2019 22:23:43 PAGE 5   
+
+ 241   2                      if(oledl<=0)  oledl=0;
+ 242   2                       value_2[1] = (u16)(oledl*10);                  
+ 243   2                      if (Curlevel<=0)          Curlevel = 0; 
+ 244   2                      value_2[2] = (u16)(Curlevel*10);         // 实际值
+ 245   2      //              sprintf(OLED_CV,"%-2.2f",Curlevel);     
+ 246   2      //              OLED_display_str(4,42,OLED_CV);   // 显示实际电压值     
+ 247   2      
+ 248   2              }
+ 249   1      
+ 250   1      }
+ 251          
+ 252          
+ 253          
+ 254          void main(void)
+ 255          {
+ 256   1              GPIO_Init();            // GPIO初始化
+ 257   1              TM1638_Init();          // 键盘数码管模块初始化
+ 258   1              //OLED_Init();                    // OLED初始化
+ 259   1              LedDisplay1(16, 29, 30, 28, 28, 0, 16, 16); // 数码管显示欢迎界面
+ 260   1      //      OLED_Show_Chinese(0,0,0);  
+ 261   1      //      OLED_Show_Chinese(0,16,1); 
+ 262   1      //      OLED_Show_Chinese(0,32,2);   
+ 263   1      //      OLED_Show_Chinese(0,50,3);  
+ 264   1      //      OLED_Show_Chinese(0,66,4);  
+ 265   1      //      OLED_Show_Chinese(0,82,5); 
+ 266   1      //      OLED_Show_Chinese(0,98,6);   //显示PID水箱控制 
+ 267   1      //      
+ 268   1      //      OLED_display_str(4,0,"CurV:");
+ 269   1      //      OLED_display_str(4,90,"MM");
+ 270   1      //              
+ 271   1              DelayUS(10);
+ 272   1              ADC_Init();             // ADC初始化
+ 273   1              PWM_Init();             // PWM 初始化
+ 274   1              Timer0_Init();          // 定时器初始化
+ 275   1              // PID_Init();      // PID初始化
+ 276   1              EA = 1;                 // 开启总中断
+ 277   1              PWM_LED = 0;            // 初始化完成,提示灯亮起
+ 278   1              PWM_Level = 0;      // 水箱PWM输出端口初始化
+ 279   1              DelayMS(1000);          // 上电延时等待系统稳定
+ 280   1              while (1)
+ 281   1              {
+ 282   2                      ADC_Simple();            // ADC采样
+ 283   2                      OutChose();                      // 输出选择
+ 284   2                      keyValue = KeyScan();    // 获取键值
+ 285   2                      if (keyValue != 0xff)    // 如果有按键按下
+ 286   2                      {
+ 287   3                              KeyProcess();            // 按键处理
+ 288   3                              while (keyValue == KeyScan());  // 等待按键释放
+ 289   3                      }
+ 290   2                      if (!setVflag)  // 菜单显示
+ 291   2                      {
+ 292   3                              display_Value(symb1, -1, value_1[symb1],setValue);
+ 293   3                              
+ 294   3                      }               
+ 295   2                      else 
+ 296   2                      {                                       
+ 297   3                              display_Value(symb1, symb2, value_1[symb1], value_2[symb2]);
+ 298   3                      }
+ 299   2              }
+ 300   1      }
+
+
+C51 COMPILER V9.59.0.0   MQMAIN                                                            05/27/2019 22:23:43 PAGE 6   
+
+MODULE INFORMATION:   STATIC OVERLAYABLE
+   CODE SIZE        =   1132    ----
+   CONSTANT SIZE    =   ----    ----
+   XDATA SIZE       =   ----    ----
+   PDATA SIZE       =   ----    ----
+   DATA SIZE        =     51      30
+   IDATA SIZE       =   ----    ----
+   BIT SIZE         =      1    ----
+END OF MODULE INFORMATION.
+
+
+C51 COMPILATION COMPLETE.  0 WARNING(S),  0 ERROR(S)

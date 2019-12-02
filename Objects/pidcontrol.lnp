@@ -1,0 +1,7 @@
+".\Objects\ADC.obj",
+".\Objects\delay.obj",
+".\Objects\MQmain.obj",
+".\Objects\pwm.obj",
+".\Objects\TM1638.obj" 
+TO ".\Objects\pidcontrol" 
+PRINT(".\Listings\pidcontrol.m51") RAMSIZE(256) 
